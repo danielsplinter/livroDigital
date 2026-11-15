@@ -167,6 +167,7 @@ export async function loadAssets(): Promise<LoadedResources> {
         title,
         paragraphs,
         imageUrl: resolveImageUrl(path, data, id),
+        isStory: path.includes("/historias/"),
         order: getDisplayOrder(data),
       };
     })

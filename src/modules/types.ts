@@ -14,6 +14,8 @@ export type AssetPair = {
   title: string;
   paragraphs: string[];
   imageUrl?: string;
+  /** Veio de resources/historias/. */
+  isStory?: boolean;
 };
 
 export type LoadedResources = {

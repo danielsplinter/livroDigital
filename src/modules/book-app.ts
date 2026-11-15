@@ -99,9 +99,10 @@ export class BookApp {
     }
 
     if (page.kind === "blank") {
-      // Folha em branco apos o sumario: volta para perto do sumario.
+      // Folha em branco de papel (apos o sumario ou uma historia): conta como
+      // parte do que vem antes dela.
       if (page.paper) {
-        return "toc";
+        return index > 0 ? this.anchorKey(index - 1) : "cover";
       }
 
       // Espaco ao lado da capa (inicio) ou da contracapa (fim).
@@ -327,23 +328,54 @@ export class BookApp {
     const frontMatterPages = contentPages.slice(0, frontMatterCount);
     const mainContentPages = contentPages.slice(frontMatterCount);
     const titleEntries = this.extractTitleEntries(contentPages);
-    let tocPages = this.paginateTocEntries([], size);
+    const paperBlank = (): PageContent => ({ kind: "blank", paper: true });
 
-    // Se o sumario termina numa pagina de numero impar, entra uma pagina em
-    // branco depois dele. Ela conta na numeracao, entao o conteudo seguinte
-    // avanca um numero — e os destinos do sumario tambem.
+    // Numeros de pagina comecam em 1 logo apos a capa; folhas em branco de
+    // papel tambem contam. Por isso cada folha inserida empurra as seguintes.
+    // - Sumario terminando em pagina impar: folha em branco depois dele.
+    // - Historia terminando em pagina impar: folha em branco depois dela.
     const blankAfterTocCount = (tocCount: number): number =>
       (frontMatterCount + tocCount) % 2 === 1 ? 1 : 0;
 
+    const layoutMainContent = (firstPageNumber: number): PageContent[] => {
+      const result: PageContent[] = [];
+      let pageNumber = firstPageNumber;
+
+      mainContentPages.forEach((page, index) => {
+        result.push(page);
+        const next = mainContentPages[index + 1];
+        const endsStory =
+          this.isStoryPage(page) &&
+          !(next && "sourceId" in next && "sourceId" in page && next.sourceId === page.sourceId);
+
+        if (endsStory && pageNumber % 2 === 1) {
+          result.push(paperBlank());
+          pageNumber += 1;
+        }
+
+        pageNumber += 1;
+      });
+
+      return result;
+    };
+
+    let tocPages = this.paginateTocEntries([], size);
+    let tocBlankCount = 0;
+    let mainPages = mainContentPages;
+
+    // Repete ate o numero de paginas do sumario estabilizar: ele desloca tudo
+    // que vem depois, e os destinos dependem disso.
     while (true) {
       const tocCount = tocPages.length;
+      tocBlankCount = blankAfterTocCount(tocCount);
+      mainPages = layoutMainContent(frontMatterCount + tocCount + tocBlankCount + 1);
+      const mainStartIndex = coverPages.length + frontMatterCount + tocCount + tocBlankCount;
+
       const resolvedEntries = titleEntries.map((entry) => {
-        const targetPageIndex = this.resolveTocTargetPageIndex(
-          entry.contentPageIndex,
-          coverPages.length,
-          frontMatterCount,
-          tocCount + blankAfterTocCount(tocCount),
-        );
+        const page = contentPages[entry.contentPageIndex];
+        const targetPageIndex = entry.contentPageIndex < frontMatterCount
+          ? coverPages.length + entry.contentPageIndex
+          : mainStartIndex + mainPages.indexOf(page);
 
         return {
           title: entry.title,
@@ -368,8 +400,8 @@ export class BookApp {
       ...coverPages,
       ...frontMatterPages,
       ...tocPages,
-      ...(blankAfterTocCount(tocPages.length) ? [{ kind: "blank", paper: true } as const] : []),
-      ...mainContentPages,
+      ...(tocBlankCount ? [paperBlank()] : []),
+      ...mainPages,
       ...(this.backCoverImageUrl ? [{ kind: "back-cover", imageUrl: this.backCoverImageUrl } as const] : []),
       { kind: "blank" } as const,
     ];
@@ -399,26 +431,21 @@ export class BookApp {
     return entries;
   }
 
+  private isStoryPage(page: PageContent): boolean {
+    if (!("sourceId" in page) || typeof page.sourceId !== "string") {
+      return false;
+    }
+
+    const sourceId = page.sourceId;
+    return this.contentItems.some((item) => item.id === sourceId && item.isStory === true);
+  }
+
   private isFrontMatter(page: PageContent): boolean {
     return (
       "sourceId" in page &&
       typeof page.sourceId === "string" &&
       FRONT_MATTER_IDS.has(stripOrderPrefix(page.sourceId))
     );
-  }
-
-  private resolveTocTargetPageIndex(
-    contentPageIndex: number,
-    coverCount: number,
-    frontMatterCount: number,
-    tocCount: number,
-  ): number {
-    // Paginas antes do sumario nao sao deslocadas por ele.
-    if (contentPageIndex < frontMatterCount) {
-      return coverCount + contentPageIndex;
-    }
-
-    return coverCount + tocCount + contentPageIndex;
   }
 
   private paginateTocEntries(
