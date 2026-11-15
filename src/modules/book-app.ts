@@ -332,10 +332,11 @@ export class BookApp {
 
     // Numeros de pagina comecam em 1 logo apos a capa; folhas em branco de
     // papel tambem contam. Por isso cada folha inserida empurra as seguintes.
+    // So com duas paginas lado a lado (deitado/computador); em pe, nao:
     // - Sumario terminando em pagina impar: folha em branco depois dele.
     // - Historia terminando em pagina impar: folha em branco depois dela.
     const blankAfterTocCount = (tocCount: number): number =>
-      (frontMatterCount + tocCount) % 2 === 1 ? 1 : 0;
+      !singlePage && (frontMatterCount + tocCount) % 2 === 1 ? 1 : 0;
 
     const layoutMainContent = (firstPageNumber: number): PageContent[] => {
       const result: PageContent[] = [];
@@ -348,7 +349,7 @@ export class BookApp {
           this.isStoryPage(page) &&
           !(next && "sourceId" in next && "sourceId" in page && next.sourceId === page.sourceId);
 
-        if (endsStory && pageNumber % 2 === 1) {
+        if (!singlePage && endsStory && pageNumber % 2 === 1) {
           result.push(paperBlank());
           pageNumber += 1;
         }

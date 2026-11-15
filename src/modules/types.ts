@@ -72,6 +72,8 @@ export type ImagePageContent = {
   imageOnly: boolean;
   /** Como a primeira pagina de uma historia e montada (ver StoryLayout). */
   storyLayout?: StoryLayout;
+  /** Largura / altura da imagem; a area da imagem acompanha esse formato. */
+  imageRatio?: number;
 };
 
 export type PageContent =

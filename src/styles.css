@@ -69,11 +69,15 @@ body {
   padding: clamp(18px, 4vw, 34px);
 }
 
-/* Celular em pe: titulo, imagem e texto, um embaixo do outro. A imagem tem
-   altura fixa (40% da pagina) para o paginador saber quanto texto cabe. As
-   linhas sao explicitas porque o paginador mede com a figura depois do texto. */
+/* Celular em pe: titulo, imagem e texto, um embaixo do outro.
+   A area da imagem segue o formato dela (--img-ratio = largura / altura),
+   sem faixas vazias acima e abaixo, limitada a 40% da altura da pagina
+   (40cqh). Sem proporcao conhecida, o valor minimo faz a area usar os 40%.
+   As linhas sao explicitas porque o paginador mede com a figura depois do
+   texto no HTML. */
 .page-content--image-first {
-  grid-template-rows: auto 40% minmax(0, 1fr) auto;
+  container-type: size;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
 .page-content--image-first > .page-title {
@@ -82,8 +86,18 @@ body {
 
 .page-content--image-first > .page-figure {
   grid-row: 2;
+  position: relative;
+  align-self: start;
+  width: 100%;
+  height: auto;
   min-height: 0;
-  height: 100%;
+  max-height: 40cqh;
+  aspect-ratio: var(--img-ratio, 0.01);
+}
+
+.page-content--image-first > .page-figure img {
+  position: absolute;
+  inset: 0;
 }
 
 .page-content--image-first > .page-text {

@@ -13,6 +13,44 @@ type PendingParagraph = {
   isContinuation: boolean;
 };
 
+const imageRatioCache = new Map<string, Promise<number | undefined>>();
+
+/**
+ * Proporcao (largura / altura) da imagem. Basta o cabecalho do arquivo: nao
+ * espera o download inteiro (o GIF pode ser grande). Guardado entre
+ * repaginacoes. Sem resposta em 4 s, segue sem proporcao.
+ */
+function getImageRatio(url: string): Promise<number | undefined> {
+  let cached = imageRatioCache.get(url);
+
+  if (!cached) {
+    cached = new Promise((resolve) => {
+      const img = new Image();
+      const startedAt = performance.now();
+      let timer = 0;
+      const finish = (ratio: number | undefined): void => {
+        window.clearInterval(timer);
+        resolve(ratio);
+      };
+      const check = (): void => {
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          finish(img.naturalWidth / img.naturalHeight);
+        } else if (performance.now() - startedAt > 4000) {
+          finish(undefined);
+        }
+      };
+
+      timer = window.setInterval(check, 50);
+      img.onload = check;
+      img.onerror = () => finish(undefined);
+      img.src = url;
+    });
+    imageRatioCache.set(url, cached);
+  }
+
+  return cached;
+}
+
 function createMeasureRoot(size: PageMeasureSize): HTMLDivElement {
   const element = document.createElement("div");
   element.className = "measure-root";
@@ -208,15 +246,23 @@ export async function paginateContent(
     //   imagem; o texto comeca na pagina seguinte.
     if (options.storyLayout && item.imageUrl) {
       let pageParagraphs: ParagraphBlock[] = [];
+      const imageRatio = options.storyLayout === "title-image-text"
+        ? await getImageRatio(item.imageUrl)
+        : undefined;
 
       if (options.storyLayout === "title-image-text" && pendingParagraphs.length > 0) {
         contentElement.classList.add("page-content--image-first");
         figureElement.style.display = "";
+        // Mesma altura de imagem que a pagina real tera (ver CSS).
+        if (imageRatio) {
+          figureElement.style.setProperty("--img-ratio", String(imageRatio));
+        }
         titleElement.textContent = item.title;
         textElement.innerHTML = "";
         const availableHeight = textElement.clientHeight;
         pageParagraphs = fillPageParagraphs(textElement, pendingParagraphs, availableHeight);
         contentElement.classList.remove("page-content--image-first");
+        figureElement.style.removeProperty("--img-ratio");
         figureElement.style.display = "none";
       }
 
@@ -228,6 +274,7 @@ export async function paginateContent(
         imageUrl: item.imageUrl,
         imageOnly: false,
         storyLayout: options.storyLayout,
+        imageRatio,
       });
       isFirstPageForItem = false;
       imagePlaced = true;

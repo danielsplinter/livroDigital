@@ -106,10 +106,13 @@ export function renderPageMarkup(page: PageContent, pageNumber?: number): string
     `;
   }
 
+  const ratioStyle = page.kind === "image" && page.imageRatio
+    ? ` style="--img-ratio: ${page.imageRatio}"`
+    : "";
   const imageMarkup =
     page.kind === "image"
       ? `
-        <figure class="page-figure">
+        <figure class="page-figure"${ratioStyle}>
           <img src="${page.imageUrl}" alt="${escapeHtml(page.title ?? "Ilustracao")}" />
         </figure>
       `
