@@ -1,0 +1,1 @@
+{"root":["./src/main.ts","./src/modules/book-app.ts","./src/modules/page-templates.ts","./src/modules/paginator.ts","./src/modules/resource-loader.ts","./src/modules/types.ts"],"version":"5.9.3"}
