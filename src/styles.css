@@ -69,6 +69,41 @@ body {
   padding: clamp(18px, 4vw, 34px);
 }
 
+/* Celular em pe: titulo, imagem e texto, um embaixo do outro. A imagem tem
+   altura fixa (40% da pagina) para o paginador saber quanto texto cabe. As
+   linhas sao explicitas porque o paginador mede com a figura depois do texto. */
+.page-content--image-first {
+  grid-template-rows: auto 40% minmax(0, 1fr) auto;
+}
+
+.page-content--image-first > .page-title {
+  grid-row: 1;
+}
+
+.page-content--image-first > .page-figure {
+  grid-row: 2;
+  min-height: 0;
+  height: 100%;
+}
+
+.page-content--image-first > .page-text {
+  grid-row: 3;
+}
+
+.page-content--image-first > .page-footer {
+  grid-row: 4;
+}
+
+/* Duas paginas lado a lado: titulo e, abaixo, a imagem ocupando o resto. */
+.page-content--title-image {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.page-content--title-image > .page-figure {
+  min-height: 0;
+  height: 100%;
+}
+
 .page-content--image-only {
   display: flex;
   align-items: center;
@@ -148,6 +183,12 @@ body {
   text-align: left;
   font: inherit;
   cursor: pointer;
+}
+
+/* O page-flip so ignora cliques cujo alvo e o proprio <button>. Clicando no
+   texto (span), ele virava a pagina junto com o salto do sumario. */
+.toc-entry__button > * {
+  pointer-events: none;
 }
 
 .toc-entry__title,

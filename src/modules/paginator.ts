@@ -1,4 +1,4 @@
-import type { AssetPair, PageContent, ParagraphBlock } from "./types";
+import type { AssetPair, PageContent, ParagraphBlock, StoryLayout } from "./types";
 
 const IMAGE_SHARE_THRESHOLD = 0.5;
 const MIN_WORDS_FOR_PARAGRAPH_START_SPLIT = 8;
@@ -167,9 +167,15 @@ function estimateFreeRatio(textElement: HTMLElement, availableHeight: number): n
   return Math.max(0, (availableHeight - textElement.scrollHeight) / availableHeight);
 }
 
+export type PaginateOptions = {
+  /** Como abrir as historias com imagem. Sem valor: imagem depois do texto. */
+  storyLayout?: StoryLayout;
+};
+
 export async function paginateContent(
   items: AssetPair[],
   size: PageMeasureSize,
+  options: PaginateOptions = {},
 ): Promise<PageContent[]> {
   const measureRoot = createMeasureRoot(size);
   const measurePage = createMeasurePage(size);
@@ -178,8 +184,9 @@ export async function paginateContent(
   const titleElement = measurePage.querySelector<HTMLHeadingElement>(".page-title h2");
   const textElement = measurePage.querySelector<HTMLElement>(".page-text");
   const figureElement = measurePage.querySelector<HTMLElement>(".page-figure");
+  const contentElement = measurePage.querySelector<HTMLElement>(".page-content");
 
-  if (!titleElement || !textElement || !figureElement) {
+  if (!titleElement || !textElement || !figureElement || !contentElement) {
     throw new Error("Falha ao montar os elementos de medicao.");
   }
 
@@ -192,8 +199,41 @@ export async function paginateContent(
     }));
     let isFirstPageForItem = true;
     let lastTextPageIndex = -1;
+    let imagePlaced = false;
 
-    if (pendingParagraphs.length === 0) {
+    // Historias com imagem abrem com o titulo e a imagem logo abaixo.
+    // - "title-image-text" (celular em pe): o texto comeca na mesma pagina,
+    //   abaixo da imagem, e continua nas seguintes.
+    // - "title-image" (duas paginas lado a lado): a pagina tem so titulo e
+    //   imagem; o texto comeca na pagina seguinte.
+    if (options.storyLayout && item.imageUrl) {
+      let pageParagraphs: ParagraphBlock[] = [];
+
+      if (options.storyLayout === "title-image-text" && pendingParagraphs.length > 0) {
+        contentElement.classList.add("page-content--image-first");
+        figureElement.style.display = "";
+        titleElement.textContent = item.title;
+        textElement.innerHTML = "";
+        const availableHeight = textElement.clientHeight;
+        pageParagraphs = fillPageParagraphs(textElement, pendingParagraphs, availableHeight);
+        contentElement.classList.remove("page-content--image-first");
+        figureElement.style.display = "none";
+      }
+
+      pages.push({
+        kind: "image",
+        sourceId: item.id,
+        title: item.title,
+        paragraphs: pageParagraphs,
+        imageUrl: item.imageUrl,
+        imageOnly: false,
+        storyLayout: options.storyLayout,
+      });
+      isFirstPageForItem = false;
+      imagePlaced = true;
+    }
+
+    if (!imagePlaced && pendingParagraphs.length === 0) {
       pages.push({
         kind: "text",
         sourceId: item.id,
@@ -227,7 +267,7 @@ export async function paginateContent(
       isFirstPageForItem = false;
     }
 
-    if (!item.imageUrl) {
+    if (!item.imageUrl || imagePlaced) {
       continue;
     }
 

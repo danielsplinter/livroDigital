@@ -32,6 +32,12 @@ export type BackCoverPageContent = {
 
 export type BlankPageContent = {
   kind: "blank";
+  /**
+   * Folha de papel em branco dentro do livro (ex.: apos o sumario). Entra na
+   * contagem das paginas, mas nao mostra numero. Sem isso, e o espaco fora do
+   * livro ao lado da capa e da contracapa.
+   */
+  paper?: boolean;
 };
 
 export type TocPageContent = {
@@ -47,6 +53,14 @@ export type TextPageContent = {
   paragraphs: ParagraphBlock[];
 };
 
+/**
+ * Primeira pagina de uma historia com imagem:
+ * - "title-image-text": titulo, imagem e o comeco do texto (uma pagina por vez).
+ * - "title-image": so titulo e imagem; o texto comeca na pagina seguinte
+ *   (duas paginas lado a lado).
+ */
+export type StoryLayout = "title-image-text" | "title-image";
+
 export type ImagePageContent = {
   kind: "image";
   sourceId?: string;
@@ -54,6 +68,8 @@ export type ImagePageContent = {
   paragraphs: ParagraphBlock[];
   imageUrl: string;
   imageOnly: boolean;
+  /** Como a primeira pagina de uma historia e montada (ver StoryLayout). */
+  storyLayout?: StoryLayout;
 };
 
 export type PageContent =

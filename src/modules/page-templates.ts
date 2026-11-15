@@ -41,6 +41,14 @@ export function renderPageMarkup(page: PageContent, pageNumber?: number): string
     `;
   }
 
+  if (page.kind === "blank" && page.paper) {
+    return `
+      <article class="book-page" aria-hidden="true">
+        <div class="page-content page-content--blank"></div>
+      </article>
+    `;
+  }
+
   if (page.kind === "blank") {
     return `
       <article class="book-page book-page--blank" aria-hidden="true">
@@ -107,20 +115,37 @@ export function renderPageMarkup(page: PageContent, pageNumber?: number): string
       `
       : "";
 
+  const storyLayout = page.kind === "image" ? page.storyLayout : undefined;
   const footerMarkup = `
     <footer class="page-footer">
       <span>${pageNumber ?? ""}</span>
     </footer>
   `;
 
+  // Duas paginas lado a lado: titulo e imagem ocupando o resto da pagina.
+  if (storyLayout === "title-image") {
+    return `
+      <article class="book-page">
+        <div class="page-content page-content--title-image">
+          ${titleMarkup}
+          ${imageMarkup}
+          ${footerMarkup}
+        </div>
+      </article>
+    `;
+  }
+
+  const imageFirst = storyLayout === "title-image-text";
+
   return `
     <article class="book-page">
-      <div class="page-content">
+      <div class="page-content${imageFirst ? " page-content--image-first" : ""}">
         ${titleMarkup}
+        ${imageFirst ? imageMarkup : ""}
         <section class="page-text">
           ${buildParagraphs(page.paragraphs)}
         </section>
-        ${imageMarkup}
+        ${imageFirst ? "" : imageMarkup}
         ${footerMarkup}
       </div>
     </article>

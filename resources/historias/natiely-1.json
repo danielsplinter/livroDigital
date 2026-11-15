@@ -1,5 +1,7 @@
 {
   "titulo": "A farinha de mandioca",
+  "ordem": 8,
+  "imagem": "./natiely-1.png",
   "paragrafos": [
     {"paragrafo": "Oi! Meu nome é Natielly, tenho 12 anos e hoje vou falar de uma lembrança que tenho até hoje guardada no meu coração. Eu era bem pequena, e essa história marcou muito a minha infância."},
     {"paragrafo": "Vou falar da farinha de mandioca que eu fazia com a minha vó e a minha família. Tinha um sabor que ninguém conseguia imitar. A minha vó levou um caminhão de mandioca para a roça do meu tio. A gente descascava toda a mandioca. Após isso, levávamos para a máquina, onde tiravam toda a água da mandioca."},

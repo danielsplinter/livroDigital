@@ -3,7 +3,7 @@ import type { PageRect } from "page-flip";
 import type { SizeType } from "page-flip";
 import { renderPageMarkup } from "./page-templates";
 import { paginateContent } from "./paginator";
-import { loadAssets } from "./resource-loader";
+import { FRONT_MATTER_IDS, loadAssets, stripOrderPrefix } from "./resource-loader";
 import type { AssetPair, PageContent, TocEntry } from "./types";
 
 const BOOK_SETTINGS = {
@@ -15,15 +15,7 @@ const BOOK_SETTINGS = {
   maxHeight: 1100,
 } as const;
 
-const FRONT_MATTER_IDS = new Set([
-  "folha-rosto",
-  "dedicatoria",
-  "inspiracao",
-  "apresentacao",
-  "agradecimentos",
-]);
 
-const BACK_MATTER_IDS = new Set(["creditos-finais"]);
 
 // Telas ate esta largura (celular, tablet) usam o livro de borda a borda.
 const COMPACT_MAX_WIDTH = 960;
@@ -107,7 +99,12 @@ export class BookApp {
     }
 
     if (page.kind === "blank") {
-      // Folha em branco inicial fica ao lado da capa; a final, da contracapa.
+      // Folha em branco apos o sumario: volta para perto do sumario.
+      if (page.paper) {
+        return "toc";
+      }
+
+      // Espaco ao lado da capa (inicio) ou da contracapa (fim).
       return index === 0 ? "cover" : "back-cover";
     }
 
@@ -226,7 +223,11 @@ export class BookApp {
   }
 
   private async createPageElements(size: { pageWidth: number; pageHeight: number }): Promise<HTMLElement[]> {
-    const pages = await paginateContent(this.contentItems, size);
+    const pages = await paginateContent(this.contentItems, size, {
+      // Em pe: titulo, imagem e texto na mesma pagina. Deitado/computador:
+      // titulo e imagem numa pagina, texto a partir da seguinte.
+      storyLayout: this.layout?.singlePage ? "title-image-text" : "title-image",
+    });
     const bookPages = this.buildBookPagesWithToc(pages, size);
     this.bookPages = bookPages;
 
@@ -239,9 +240,10 @@ export class BookApp {
     return bookPages.map((page) => {
       const wrapper = document.createElement("div");
       wrapper.className = "page";
-      const pageNumber = page.kind === "cover" || page.kind === "back-cover" || page.kind === "blank"
-        ? undefined
-        : ++numberedPage;
+      // Capa, contracapa e o espaco fora do livro nao contam. A folha em branco
+      // apos o sumario conta, mas nao exibe o numero.
+      const counts = !(page.kind === "cover" || page.kind === "back-cover" || (page.kind === "blank" && !page.paper));
+      const pageNumber = counts ? ++numberedPage : undefined;
       wrapper.innerHTML = renderPageMarkup(page, pageNumber);
       return wrapper;
     });
@@ -318,42 +320,39 @@ export class BookApp {
       ...(singlePage ? [] : [{ kind: "blank" } as const]),
       { kind: "cover" } as const,
     ];
-    const frontMatterPages = contentPages.filter(
-      (page) => "sourceId" in page && typeof page.sourceId === "string" && FRONT_MATTER_IDS.has(page.sourceId),
-    );
-    const backMatterPages = contentPages.filter(
-      (page) => "sourceId" in page && typeof page.sourceId === "string" && BACK_MATTER_IDS.has(page.sourceId),
-    );
-    const mainContentPages = contentPages.filter((page) => {
-      if (!("sourceId" in page) || typeof page.sourceId !== "string") {
-        return true;
-      }
-
-      return !FRONT_MATTER_IDS.has(page.sourceId) && !BACK_MATTER_IDS.has(page.sourceId);
-    });
-    const orderedContentPages = [...frontMatterPages, ...mainContentPages, ...backMatterPages];
-    const titleEntries = this.extractTitleEntries(orderedContentPages);
+    // As paginas ja vem na ordem dos numeros dos arquivos. O sumario entra logo
+    // depois das secoes iniciais (folha de rosto, dedicatoria...) que abrem o livro.
+    const firstMainIndex = contentPages.findIndex((page) => !this.isFrontMatter(page));
+    const frontMatterCount = firstMainIndex === -1 ? contentPages.length : firstMainIndex;
+    const frontMatterPages = contentPages.slice(0, frontMatterCount);
+    const mainContentPages = contentPages.slice(frontMatterCount);
+    const titleEntries = this.extractTitleEntries(contentPages);
     let tocPages = this.paginateTocEntries([], size);
+
+    // Se o sumario termina numa pagina de numero impar, entra uma pagina em
+    // branco depois dele. Ela conta na numeracao, entao o conteudo seguinte
+    // avanca um numero — e os destinos do sumario tambem.
+    const blankAfterTocCount = (tocCount: number): number =>
+      (frontMatterCount + tocCount) % 2 === 1 ? 1 : 0;
 
     while (true) {
       const tocCount = tocPages.length;
-      const resolvedEntries = titleEntries.map((entry) => ({
-        title: entry.title,
-        targetPageIndex: this.resolveTocTargetPageIndex(
+      const resolvedEntries = titleEntries.map((entry) => {
+        const targetPageIndex = this.resolveTocTargetPageIndex(
           entry.contentPageIndex,
-          entry.sourceId,
           coverPages.length,
-          frontMatterPages.length,
-          tocCount,
-        ),
-        targetPageNumber: this.resolveTocTargetPageIndex(
-          entry.contentPageIndex,
-          entry.sourceId,
-          coverPages.length,
-          frontMatterPages.length,
-          tocCount,
-        ),
-      }));
+          frontMatterCount,
+          tocCount + blankAfterTocCount(tocCount),
+        );
+
+        return {
+          title: entry.title,
+          targetPageIndex,
+          // Mesmo numero do rodape: a contagem comeca depois da capa (e da
+          // folha em branco antes dela), que nao sao numeradas.
+          targetPageNumber: targetPageIndex - coverPages.length + 1,
+        };
+      });
 
       const nextTocPages = this.paginateTocEntries(resolvedEntries, size);
 
@@ -369,8 +368,8 @@ export class BookApp {
       ...coverPages,
       ...frontMatterPages,
       ...tocPages,
+      ...(blankAfterTocCount(tocPages.length) ? [{ kind: "blank", paper: true } as const] : []),
       ...mainContentPages,
-      ...backMatterPages,
       ...(this.backCoverImageUrl ? [{ kind: "back-cover", imageUrl: this.backCoverImageUrl } as const] : []),
       { kind: "blank" } as const,
     ];
@@ -400,18 +399,26 @@ export class BookApp {
     return entries;
   }
 
+  private isFrontMatter(page: PageContent): boolean {
+    return (
+      "sourceId" in page &&
+      typeof page.sourceId === "string" &&
+      FRONT_MATTER_IDS.has(stripOrderPrefix(page.sourceId))
+    );
+  }
+
   private resolveTocTargetPageIndex(
     contentPageIndex: number,
-    sourceId: string | undefined,
     coverCount: number,
     frontMatterCount: number,
     tocCount: number,
   ): number {
-    if (sourceId && FRONT_MATTER_IDS.has(sourceId)) {
+    // Paginas antes do sumario nao sao deslocadas por ele.
+    if (contentPageIndex < frontMatterCount) {
       return coverCount + contentPageIndex;
     }
 
-    return coverCount + frontMatterCount + tocCount + (contentPageIndex - frontMatterCount);
+    return coverCount + tocCount + contentPageIndex;
   }
 
   private paginateTocEntries(
